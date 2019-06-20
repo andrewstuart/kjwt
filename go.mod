@@ -3,6 +3,7 @@ module astuart.co/kjwt
 go 1.12
 
 require (
+	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/imdario/mergo v0.3.7 // indirect
 	golang.org/x/crypto v0.0.0-20190618222545-ea8f1a30c443 // indirect
 	golang.org/x/net v0.0.0-20190619014844-b5b0513f8c1b // indirect
