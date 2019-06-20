@@ -1,15 +1,42 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"os/user"
 	"path"
+	"strings"
+	"text/tabwriter"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
 	"k8s.io/client-go/tools/clientcmd"
 )
+
+type SillyTime struct {
+	time.Time
+}
+
+func (s *SillyTime) UnmarshalJSON(bs []byte) error {
+	var st int64
+	err := json.Unmarshal(bs, &st)
+	if err != nil {
+		return err
+	}
+	*s = SillyTime{time.Unix(st, 0)}
+	return nil
+}
+
+type claims struct {
+	jwt.StandardClaims
+	Groups    []string
+	Email     string
+	ExpiresAt *SillyTime `json:"exp,omitempty"`
+	IssuedAt  *SillyTime `json:"iat,omitempty"`
+	NotBefore *SillyTime `json:"nbf,omitempty"`
+}
 
 func main() {
 	u, _ := user.Current()
@@ -22,23 +49,33 @@ func main() {
 
 	p := &jwt.Parser{}
 
-	idT, _, err := p.ParseUnverified(id, &jwt.StandardClaims{})
+	idT, _, err := p.ParseUnverified(id, &claims{})
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	refT, _, err := p.ParseUnverified(ref, &jwt.StandardClaims{})
+	refT, _, err := p.ParseUnverified(ref, &claims{})
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	idC, refC := idT.Claims.(*claims), refT.Claims.(*claims)
 	n := time.Now()
-	exp := time.Unix(idT.Claims.(*jwt.StandardClaims).ExpiresAt, 0)
-	refExp := time.Unix(refT.Claims.(*jwt.StandardClaims).ExpiresAt, 0)
-	switch {
-	case n.Before(exp):
-		fmt.Printf("id token valid until %s (%s)\n", exp, exp.Sub(n))
-	case n.Before(refExp):
-		fmt.Printf("id token expired, but refresh valid until %s\n", exp)
+
+	tw := tabwriter.NewWriter(os.Stdout, 1, 2, 1, ' ', 0)
+
+	// 	red := color.New(color.FgRed).SprintFunc()
+	red := func(s string) string {
+		return s
 	}
+
+	fmt.Fprintf(tw, red("ID\t\n"))
+	fmt.Fprintf(tw, "Expiry\t%s\n", idC.ExpiresAt.Format(time.Stamp))
+	fmt.Fprintf(tw, "Time Left\t%s\n", idC.ExpiresAt.Sub(n).Round(time.Minute))
+	fmt.Fprintf(tw, "Groups\t%s\n", strings.Join(idC.Groups, ", "))
+	fmt.Fprintf(tw, red("\t\nRefresh\t\n"))
+	fmt.Fprintf(tw, "Expiry\t%s\n", refC.ExpiresAt.Format(time.Stamp))
+	fmt.Fprintf(tw, "Time Left\t%s\n", refC.ExpiresAt.Sub(n).Round(time.Minute))
+
+	tw.Flush()
 }
