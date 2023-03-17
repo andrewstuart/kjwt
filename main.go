@@ -38,13 +38,24 @@ type claims struct {
 	NotBefore *SillyTime `json:"nbf,omitempty"`
 }
 
+func first(ss ...string) string {
+	for _, s := range ss {
+		if s != "" {
+			return s
+		}
+	}
+	return ""
+}
+
 func main() {
 	u, _ := user.Current()
-	config, err := clientcmd.BuildConfigFromFlags("", path.Join(u.HomeDir, ".kube", "config"))
+	config, err := clientcmd.BuildConfigFromFlags("", first(os.Getenv("KUBECONFIG"), path.Join(u.HomeDir, ".kube", "cache")))
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	fmt.Printf("config = %+v\n", config)
+	fmt.Printf("config.AuthProvider = %+v\n", config.AuthProvider)
 	id, ref := config.AuthProvider.Config["id-token"], config.AuthProvider.Config["refresh-token"]
 
 	p := &jwt.Parser{}
